@@ -1,4 +1,4 @@
-## Time Series Analysis and Machine Learning - Assignment 1
+## Time Series Analysis and Machine Learning
 
 This assignment explores parameter selection and dimensionality reduction techniques in regression, including ridge regularization and principal-component-analysis with reproducible R implementations.
 
