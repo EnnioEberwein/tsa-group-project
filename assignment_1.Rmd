@@ -1,0 +1,359 @@
+---
+title: 'Stock & Watson (2020): Empirical exercises'
+author: "Michael Massmann"
+date: 'version 10a: 19th September 2025'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    includes:
+      before_body: defs.html
+  pdf_document:
+    toc: true
+---
+
+```{r include=FALSE}
+library(knitr)
+options(digits=3, scipen=5)
+opts_chunk$set(echo=TRUE,
+               eval=TRUE,
+               fig.align='center',
+               comment="",
+               message=FALSE,
+               warning=FALSE,
+               cache=TRUE#,
+               ## tidy=TRUE, # switch on tidying of code
+               ## tidy.opts=list(comment=FALSE) # in particular, do not print comment lines in code
+               )
+```
+
+
+
+
+# Chapter 6
+
+## Empirical Exercises
+
+
+### Exercise E6.1
+
+Load the data.
+```{r, eval=-3, echo=-3}
+library(readxl)
+db <- read_xlsx("../StockWatson/birthweight_smoking.xlsx")
+View(db)
+```
+
+#### Part a.
+
+```{r}
+library(lmtest)
+library(sandwich)
+modelE6.1a <- lm(birthweight ~ smoker, data = db)
+coeftest(modelE6.1a, vcov = vcovHC(modelE6.1a, type = "HC1"))
+```
+According to this model, smoking reduces birth weight by $`r - modelE6.1a$coefficients[[2]]`$ grams, on average.
+
+
+
+#### Part b.
+
+Smoking may be correlated with both alcohol and the number of pre-natal doctor visits, thus satisfying (1) in Key Concept 6.1.  Moreover, both alcohol consumption and the number of doctor visits may have their own independent
+effects on birthweight, thus satisfying (2) in Key Concept 6.1. Excluding `alcohol` and `nprevist` from the model could hence lead to omitted variable bias.
+
+```{r}
+modelE6.1b <- lm(birthweight ~ smoker + alcohol + nprevist, data =  db)
+coeftest(modelE6.1b, vcov = vcovHC(modelE6.1b, type = "HC1"))
+```
+The estimated coefficient is somewhat smaller: it has fallen to $`r - modelE6.1b$coefficients[[2]]`$ grams from $`r - modelE6.1a$coefficients[[2]]`$ grams, so the regression in Part a. may suffer from omitted variable bias. 
+
+Create now a data frame with $X$ values for an individual such as Jane that smoked during pregnancy, did not drink alcohol and had eight prenatal care visits. Use it for predicting the birth weight of that individual's child.
+```{r}
+new.db <- data.frame(smoker=1, alcohol=0, nprevist=8)
+Jane <- predict(modelE6.1b, new.db)
+```
+
+The birth weight of Jane's child is predicted to be $`r Jane`$ grams. The unadjusted $R^ 2$ is equal to $`r summary(modelE6.1b)$r.squared`$ while is adjusted $\bar R^2$ is $`r summary(modelE6.1b)$adj.r.squared`$. The two are nearly identical because the sample size $n$ is very large relative to the
+number $k$ of regressors.
+
+
+#### Part c.
+
+This part illustrates the Frisch-Waugh theorem.
+
+```{r, echo=c(2:4,6:8,10:11)}
+## regress birthweight on alcohol and nprevist, and save residuals
+modelE6.1c1 <- lm(birthweight ~ alcohol + nprevist, data = db)
+bw_res <- residuals(modelE6.1c1)
+summary(modelE6.1c1)
+## regress smoker on alcohol and nprevist, and save residuals
+modelE6.1c2 <- lm(smoker ~ alcohol + nprevist, data = db) 
+smoker_res <- residuals(modelE6.1c2)
+summary(modelE6.1c2)
+## regress bw_res on smoker_res, omitting the constant term
+modelE6.1c3 <- lm(bw_res ~ -1 + smoker_res) 
+summary(modelE6.1c3)
+```
+
+
+#### Part d.
+```{r}
+modelE6.1d <- lm(birthweight ~ smoker + alcohol + tripre0 + tripre2 + tripre3, data = db)
+coeftest(modelE6.1d, vcov = vcovHC(modelE6.1d, type = "HC1"))
+```
+
+`Tripre1` is omitted to avoid perfect multicollinearity.  If it were included, R would arbitrarily exclude `Tripre3` as a result. Babies born to women who had no prenatal doctor visits (`Tripre0 = 1`) had birthweights that on
+average were `r modelE6.1d$coefficients[[4]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`). Babies born to women whose first doctor visit was during the second trimester (`Tripre2
+= 1`) had birthweights that on average were `r modelE6.1d$coefficients[[5]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`). Babies born to women whose first doctor visit was during
+the third trimester (`Tripre3 = 1`) had birthweights that on average were `r modelE6.1d$coefficients[[6]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`).
+
+
+
+````{comment}
+
+### Exercise E6.2 
+
+Load the `Growth` dataset and exclude Malta from it:
+```{r, eval=-4, echo=-4}
+library(readxl)
+Growth <- read_excel("../StockWatson/Growth.xlsx")
+Growth1 <- Growth[Growth$country_name != 'Malta',]
+View(Growth1)
+```
+
+
+#### Part a. 
+
+A neat table with summary statistics is available via the `describe` command of the `psych` package.
+```{r}
+library(psych)
+vars <- Growth1[,c("growth", "tradeshare", "yearsschool", "oil", "rev_coups", "assasinations", "rgdp60")]
+describe(vars, skew=FALSE)
+```
+The variable `growth` is measured in percent, `tradeshare` is a fraction of GDP, `yearsschoool` is measured in years, `oil` is a dummy variable, `rev_coups` and `assassinations` are count variables, and `rgdp60` is measured in US dollars.
+
+
+#### Part b.
+
+Estimate the linear regression using OLS. Remember to load the `lmtest` and `sandwich` packages for the summary table and heteroscedasticty-robust standard errors.
+
+```{r}
+library(lmtest)
+library(sandwich)
+modelE6.2b <- lm(growth ~ tradeshare + yearsschool + rev_coups + assasinations + rgdp60, data = Growth1)
+coeftest(modelE6.2b, vcovHC(modelE6.2b, type = "HC1"))
+```
+The coefficient on `rev_coups` is $-2.15$. This implies that one additional coup d'etat in those 35 years reduces annual GDP growth by 2.15% per year on average. If the coup happens in 1960 then the GDP in 1995 would be $2.15\% \cdot 35 = 75.25\%$ lower. This is a large effect. 
+
+
+#### Part c. 
+
+To compute the fitted values at the regressors' averages, use the `predict` command, whose `newdata` argument contains a dataframe with the averages, appropriately named. Note that the dataframe of averages must have column labels
+in order to be recognised by `predict`, hence the transposition of the vector `avg`.
+
+```{r}
+avg <- colMeans(Growth1[,variable.names(modelE6.2b)[-1]])
+avg <- as.data.frame(t(avg))
+predict(modelE6.2b, newdata = avg)[[1]]
+
+```
+The predicted growth rate at the mean values for all regressors is hence `r round(predict(modelE6.2b, newdata = avg), 2)`.
+
+#### Part d.
+
+```{r, echo=FALSE}
+sd <- sd(data.matrix(Growth1[,"tradeshare"]))
+avgnew <- avg
+avgnew[1,1] <- avgnew[1,1] + sd
+predict(modelE6.2b, newdata = avgnew)[[1]]
+```
+Add one standard deviation to average tradeshare to find that the predicted growth rate is `r round(predict(modelE6.2b, newdata = avgnew), 2)`.
+
+
+#### Part e. 
+
+Recall that the variable `oil` takes on the value of 0 for all 64 countries in the sample. Including it would generate perfect multicollinearity, since `oil` is a linear combination of the constant regressor.
+
+````
+
+
+
+
+# Chapter 7
+
+## Empirical Exercises
+
+
+### Exercise E7.1
+
+Load the data. Estimate the three regression models, using heteroscedasticity-robust standard errors. Display the results in a table.
+
+```{r}
+library(readxl)
+db <- read_xlsx("../StockWatson/birthweight_smoking.xlsx")
+
+modelE7.1i <- lm(birthweight ~ smoker, data = db)
+modelE7.1ii <- lm(birthweight ~ smoker + alcohol + nprevist, data = db)
+modelE7.1iii <- lm(birthweight ~ smoker + alcohol + nprevist + unmarried, data = db)
+
+library(sandwich)
+robseE7.1i <- sqrt(diag(vcovHC(modelE7.1i, type = "HC1")))
+robseE7.1ii <- sqrt(diag(vcovHC(modelE7.1ii, type = "HC1")))
+robseE7.1iii <- sqrt(diag(vcovHC(modelE7.1iii, type = "HC1")))
+
+library(stargazer)
+stargazer(modelE7.1i, modelE7.1ii, modelE7.1iii, 
+          se=list(robseE7.1i, robseE7.1ii, robseE7.1iii),
+          title="Regression Results", type="text",
+          df=FALSE)
+```
+
+#### Part a.
+
+Smoking is estimated to decrease birth weight by `r - modelE7.1i$coefficients[[2]]`, `r - modelE7.1ii$coefficients[[2]]` and `r - modelE7.1iii$coefficients[[2]]` grams, respectively.
+
+
+#### Part b.
+
+The corresponding 95% confidence intervals are
+$$
+\begin{align*}
+[`r modelE7.1i$coefficients[[2]] - qnorm(0.975)*robseE7.1i[[2]]` &, `r modelE7.1i$coefficients[[2]] + qnorm(0.975)*robseE7.1i[[2]]`] \\
+[`r modelE7.1ii$coefficients[[2]] - qnorm(0.975)*robseE7.1ii[[2]]` &, `r modelE7.1ii$coefficients[[2]] + qnorm(0.975)*robseE7.1ii[[2]]`] \\
+[`r modelE7.1iii$coefficients[[2]] - qnorm(0.975)*robseE7.1iii[[2]]` &, `r modelE7.1iii$coefficients[[2]] + qnorm(0.975)*robseE7.1iii[[2]]`] \\
+\end{align*}
+$$
+respectively.
+
+
+
+#### Part c.
+Yes it seems so. The coefficient of `smoker` falls by roughly 15% in magnitude when `alcohol` and `nprevist` are added to the regression.  This change is large relative to the standard error in (1).
+
+
+#### Part d.
+Yes it seems so. The coefficient of `smoker` falls by roughly 20% in magnitude when `unmarried` is added as an additional regressor.  Again, this change is large relative to the standard error in (2). 
+
+
+#### Part e.
+
+The 95% confidence interval is given by $[`r modelE7.1iii$coefficients[[5]] - qnorm(0.975)*robseE7.1iii[[5]]`, `r modelE7.1iii$coefficients[[5]] + qnorm(0.975)*robseE7.1iii[[5]]`]$. It does not include zero, so the coefficient is
+statistically significantly different from zero. The coefficient seems large since, on average, birthweight is `r - modelE7.1iii$coefficients[[5]]` grams lower for unmarried mothers. Such public policies are unlikely to lead to
+healthier babies, since `unmarried` is a control variable that captures the effects of several factors that differ between married and unmarried mothers such as age, education, income, diet, other health factors, and so forth.
+
+
+#### Part f.
+
+```{r}
+library(stargazer)
+modelE7.1f <- lm(birthweight ~ smoker + alcohol + nprevist + unmarried + age + educ, data = db)
+robseE7.1f <- sqrt(diag(vcovHC(modelE7.1f, type = "HC1")))
+stargazer(modelE7.1f,
+          se=list(robseE7.1f),
+          title="Regression Results", type="text",
+          df=FALSE)
+```
+Including `age` and `educ` in the model results in a coefficient on `smoker` that is  very similar to its value in regression model (3) above.
+
+
+
+````{comment}
+
+### Exercise E7.2
+
+Load the data.
+
+```{r}
+library(readxl)
+EnH <- read_excel("../StockWatson/Earnings_and_Height.xlsx")
+```
+
+
+#### Part a.
+
+According to Key Concept 6.1, omitted variable bias arises if:
+
+ 1. the regressor $X$ is correlated with the omitted variable, and
+ 2. the omitted variable is a determinant of the dependent variable $Y$.
+ 
+The mechanism described in the question explains why the regressor `height` and the omitted variable `cognitive ability` are correlated and why `cognitive ability` is a determinant of the depedend variable `earnings`.  This
+mechanism suggests that height and cognitive ability are positively correlated and that cognitive ability has a positive effect on earnings. Thus, the regressor will be positively correlated with the error, leading to a positive
+bias in the estimated coefficient.
+
+
+#### Part b.
+
+Create the suggested variables:
+```{r}
+EnH$LT_HS <- with(EnH, ifelse(educ < 12, 1, 0))
+EnH$HS <- with(EnH, ifelse(educ == 12, 1, 0))
+EnH$Some_Col <- with(EnH, ifelse( educ > 12 & educ < 16, 1, 0))
+EnH$College <- with(EnH, ifelse(educ >= 16, 1, 0))
+```
+
+and create subsets of the data for men and women:
+```{r}
+EnH_female <- subset(EnH, EnH$sex == "0")
+EnH_male <- subset(EnH, EnH$sex == "1")
+```
+
+Estimate now the regression models for women only, construct heteroscedasticty-robust standard errors, and display the results.
+```{r}
+library(sandwich)
+library(stargazer)
+modelE7.2b1 <- lm(earnings ~ height, data= EnH_female)
+modelE7.2b2 <- lm(earnings ~ height + LT_HS + HS + Some_Col + College, data= EnH_female)
+robseE7.2b1 <- sqrt(diag(vcovHC(modelE7.2b1, type = "HC1")))
+robseE7.2b2 <- sqrt(diag(vcovHC(modelE7.2b2, type = "HC1")))
+stargazer(modelE7.2b1, modelE7.2b2,
+          se=list(robseE7.2b1, robseE7.2b2),
+          title="Regression Results",
+          type="text",
+          df=FALSE,
+          digits=3)
+```
+
+The estimated coefficient on `height` falls by approximately 75%, from `r modelE7.2b1$coefficients[[2]]` to `r modelE7.2b2$coefficients[[2]]` when the education variables are added as control variables in the regression. This is
+consistent with positive omitted bias in the first model.
+
+Yet `College` is dropped from the model automatically since it is perfectly collinear with the other education dummies and the constant term.
+
+For an F-test on the relevance of the education variables, estimate the model without `College` again to actively avoid the dummy variable trap. The `car` package has the convenient `lht` command for testing joint null hypotheses.
+
+```{r}
+modelE7.2b2 <- lm(earnings ~ height + LT_HS + HS + Some_Col, data= EnH_female)
+library(car)
+Ftest <- lht(modelE7.2b2, c("LT_HS = 0", "HS = 0", "Some_Col = 0"), white.adjust = "hc1")
+Ftest
+```
+
+The F-statistic is `r Ftest$F[[2]]`, which is larger than the 1% critical value of `r qf(0.99, 3, Inf)`, taken from the $F (3,\infty)$-distribution. Therefore, the null hypothesis that the coefficients on the education variables are
+jointly equal to zero is rejected at the 1% significance level.
+
+The coefficients measure the effect of education on earnings relative to the omitted category, which is `College`. Thus, the estimated coefficient on regressor `LS_HS` implies that workers with less than a high school education on
+average earn \$`r -modelE7.2b2$coefficients[[3]]` less per year than a college graduate. A worker with a high school education earns on average \$`r -modelE7.2b2$coefficients[[4]]` less per year than a college graduate. And a
+worker with a some college educaton on average earns \$`r -modelE7.2b2$coefficients[[5]]` less per year than a college graduate.
+
+
+#### Part c.
+
+Repeating the analysis for men, yields
+```{r}
+library(stargazer)
+modelE7.2c1 <- lm(earnings ~ height, data=EnH_male)
+modelE7.2c2 <- lm(earnings ~ height + LT_HS + HS + Some_Col, data=EnH_male)
+robseE7.2c1 <- sqrt(diag(vcovHC(modelE7.2c1, type = "HC1")))
+robseE7.2c2 <- sqrt(diag(vcovHC(modelE7.2c2, type = "HC1")))
+stargazer(modelE7.2c1, modelE7.2c2,
+          se=list(robseE7.2c1, robseE7.2c2),
+          title="Regression Results",
+          type="text",
+          df=FALSE,
+          digits=3)
+lht(modelE7.2c2, c("LT_HS = 0", "HS = 0", "Some_Col = 0"), white.adjust = "hc1")
+```
+The results are qualitatively similar to those for women.
+
+````
+
+

@@ -1,0 +1,169 @@
+---
+title: 'Group Assignment - Ridge Regression Analysis on Credit Data'
+author: "Group 4"
+date: 'version 1: 18th Novemeber 2025'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    includes:
+      before_body: defs.html
+  pdf_document:
+    toc: true
+---
+
+Introduction: This report presents an analysis of Credit dataset. The objective is to predict Balance based on various predictors including Income, Limit, Rating, and Student status.We employ Ridge Regression, a shrinkage method suitable for multicollinear data, and compare the coefficient estimates against Ordinary Least Squares (OLS). We analyze the behavior of the coefficients as the tuning parameter $\lambda$ increases, shrinking the estimates toward zero.The Ridge regression coefficient estimates $\hat{\beta}^{R}$ are the values that minimize:$$\sum_{i=1}^{n} \left( y_i - \beta_0 - \sum_{j=1}^{p} \beta_j x_{ij} \right)^2 + \lambda \sum_{j=1}^{p} \beta_j^2$$Task A: Data Preparation We begin by loading the required libraries and the dataset. We perform necessary preprocessing, including converting categorical variables (Student, Own, Married) into binary format and creating dummy variables for the Region predictor.# Import necessary libraries
+
+```{r}
+library(readxl)
+library(dplyr)
+library(purrr)
+library(MASS) ## for ridge estimation
+library(knitr) # For table formatting
+```
+
+# Load data
+# Note: Ensure credit_data.csv is in the working directory
+data <- read.csv("credit_data.csv")
+
+# Replace Yes/No with binary numbers
+data$Student <- ifelse(data$Student == "Yes", 1, 0)
+data$Own <- ifelse(data$Own == "Yes", 1, 0)
+data$Married <- ifelse(data$Married == "Yes", 1, 0)
+
+# Create dummy variables for Region (excluding the intercept)
+region_dummies <- model.matrix(~ Region - 1, data = data)
+
+# Combine with the rest of the data and remove Region column
+data <- cbind(data[ , !(names(data) %in% "Region")], region_dummies)
+
+# Display the first few rows of the cleaned data
+kable(head(data), caption = "First 6 rows of prepared Credit data")
+StandardizationTo ensure fair penalization in Ridge regression, we standardize the predictors so that they are on the same scale.# Define predictors (X) and variable of interest (Y)
+X <- dplyr::select(data, Income, Limit, Rating, Cards, Age, Education, 
+                   Own, Student, Married, RegionEast, RegionWest, RegionSouth)
+Y <- data$Balance
+
+# Standardize X values and convert to dataframe
+X_standardized <- scale(X)
+X_std <- as.data.frame(X_standardized)
+Task B: Ridge and OLS EstimationWe define custom functions to compute the Ridge coefficients for a specific $\lambda$ and the OLS coefficients (where $\lambda = 0$).# Define ridge coefficient function
+compute_coefficients <- function(lambda, X, y, m = 10) {
+  # Fit ridge model
+  ridge_fit <- lm.ridge(y ~ as.matrix(X), lambda = lambda, Inter = FALSE, scales = TRUE)
+  coefficients <- coef(ridge_fit)
+  return(coefficients)
+}
+
+# Define OLS computation function (no intercept so all dummies are estimated)
+compute_ols <- function(X, y) {
+  df  <- data.frame(y = y, X)
+  fit <- lm(y ~ . - 1, data = df)           # <- no intercept
+  b   <- coef(fit)
+  b[colnames(X)]                            # return in same order as X
+}
+We iterate through a grid of $\lambda$ values ranging from $10^{-2}$ to $10^{5}$ to observe the shrinkage effect.# Calculate OLS prediction coefficients (baseline)
+ols_coefficients <- compute_ols(X_std, Y)
+
+# Define possible lambda values
+lambdas <- 10^seq(-2, 5, length.out = 100)
+
+# Calculate Ridge coefficients for all lambda values
+coefficients <- sapply(lambdas, function(lambda) compute_coefficients(lambda, X_std, Y))
+
+# Transpose dataframe (switch columns and rows)
+df <- t(coefficients)
+
+# Drop the first column (Intercept placeholder), clean up names, include lambda
+df <- df[, -1]
+colnames(df) <- gsub("as\\.matrix\\(X\\)", "", colnames(df))
+df <- cbind(lambda = lambdas, df)
+df <- as.data.frame(df)
+L2 Norm CalculationWe calculate the $L_2$ norm of the Ridge estimators and compare them to the $L_2$ norm of the OLS estimators. This ratio, $||\hat{\beta}^{R}_\lambda||_2 / ||\hat{\beta}^{OLS}||_2$, provides a normalized measure of shrinkage on the x-axis for visualization.# Calculate l2 norm of Ridge estimators for each lambda
+ridge_norms <- apply(df[ , !(names(df) %in% "lambda")], 1, function(row) sqrt(sum(row^2)))
+
+# Calculate l2 norm of OLS estimators (remove N/A from dummy variable if necessary)
+ols_norm <- sqrt(sum(ols_coefficients^2, na.rm = TRUE))
+
+# Get norm ratio for x-axis on plot
+ridge_norm_ratio <- ridge_norms / ols_norm
+
+# Add ratio to dataframe
+df$norm_ratio <- ridge_norm_ratio
+
+# Display a preview of the results
+kable(head(df[, c("lambda", "norm_ratio", "Income", "Limit")]), 
+      caption = "Subset of Coefficients across Lambda")
+Task C: Visualization of Results1. Ridge Coefficients vs. LambdaThe following plot shows the standardized coefficients as a function of $\lambda$. As $\lambda$ increases, the coefficients shrink toward zero. Income, Limit, Rating, and Student are highlighted as the most significant variables.# Start base plot with the first line (Income)
+plot(df$lambda, df$Income, type = "l", log = "x", lwd = 2,
+     ylim = c(-300, 450), col = "black",
+     xlab = expression(lambda),
+     ylab = "Standardized Coefficients",
+     xaxt = "n",  # suppress default x-axis
+     yaxt = "n")
+
+# Custom x-axis
+axis(side = 1, at = c(0.01, 1, 100, 10000),
+     labels = c("1e-02", "1e+00", "1e+02", "1e+04"))
+
+# Custom y-axis
+axis(side = 2, at = seq(-300, 400, by = 100),
+     labels = seq(-300, 400, by = 100), las = 0)
+
+# Add the highlighted special lines
+lines(df$lambda, df$Limit, col = "red", lty = 2, lwd = 2)       # dashed
+lines(df$lambda, df$Rating, col = "blue", lty = 3, lwd = 2)     # dotted
+lines(df$lambda, df$Student, col = "goldenrod2", lty = 4, lwd = 2) # dash-dot
+
+# Add grey lines for all the "other" series
+lines(df$lambda, df$Cards, col = "grey70", lwd = 1)
+lines(df$lambda, df$Age, col = "grey70", lwd = 1)
+lines(df$lambda, df$Education, col = "grey70", lwd = 1)
+lines(df$lambda, df$Own, col = "grey70", lwd = 1)
+lines(df$lambda, df$Married, col = "grey70", lwd = 1)
+lines(df$lambda, df$RegionEast, col = "grey70", lwd = 1)
+lines(df$lambda, df$RegionWest, col = "grey70", lwd = 1)
+lines(df$lambda, df$RegionSouth, col = "grey70", lwd = 1)
+
+# Add legend
+legend("topright",
+       legend = c("Income", "Limit", "Rating", "Student"),
+       col = c("black", "red", "blue", "goldenrod2"),
+       lty = c(1, 2, 3, 4),
+       lwd = 2,
+       bty = "n",
+       cex = 1.0)
+2. Ridge Coefficients vs. Norm RatioThis plot displays the coefficients against the ratio of the Ridge L2 norm to the OLS L2 norm. The x-axis ranges from 0 (high shrinkage, high $\lambda$) to 1 (OLS solution, $\lambda = 0$). This view helps visualize the relative shrinkage of parameters.# For the norm-ratio plot, we want x to run from 0 -> 1 left-to-right
+df_ratio <- df[order(df$norm_ratio), ]
+
+plot(df_ratio$norm_ratio, df_ratio$Income, type = "l", lwd = 2,
+     xlim = c(0, 1), ylim = c(-300, 450), col = "black",
+     xlab = expression( "||" * hat(beta)[lambda]^R * "||"[2] / "||" * hat(beta) * "||"[2]),
+     ylab = "Standardized Coefficients",
+     xaxt = "s", yaxt = "s")
+
+# Highlighted series
+lines(df_ratio$norm_ratio, df_ratio$Limit,   col = "red",        lty = 2, lwd = 2)
+lines(df_ratio$norm_ratio, df_ratio$Rating,  col = "blue",       lty = 3, lwd = 2)
+lines(df_ratio$norm_ratio, df_ratio$Student, col = "goldenrod2", lty = 4, lwd = 2)
+
+# Grey lines for the others
+lines(df_ratio$norm_ratio, df_ratio$Cards,       col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$Age,         col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$Education,   col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$Own,         col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$Married,     col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$RegionEast,  col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$RegionWest,  col = "grey70", lwd = 1)
+lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70", lwd = 1)
+
+# Add legend
+legend("topleft",
+       legend = c("Income", "Limit", "Rating", "Student"),
+       col = c("black", "red", "blue", "goldenrod2"),
+       lty = c(1, 2, 3, 4),
+       lwd = 2,
+       bty = "n",
+       cex = 1.0)
+
+Conclusion: The analysis confirms that Ridge regression successfully shrinks coefficients toward zero as $\lambda$ increases. The variables Income, Limit, Rating, and Student persist as the dominant predictors of Balance even under moderate penalization, while other demographic variables shrink more rapidly, indicating less predictive power.
