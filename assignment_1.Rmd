@@ -1,359 +1,380 @@
 ---
-title: 'Stock & Watson (2020): Empirical exercises'
-author: "Michael Massmann"
-date: 'version 10a: 19th September 2025'
+title: 'Group 1 – Ridge Regression and Principal Component Analysis'
+subtitle: 'Time Series Analysis and Machine Learning (HS-2025)'
+author: "Ennio Eberwein, Daria Göbel, Patrick Trost"
+date: 'version 1: 18th Novemeber 2025'
 output:
   html_document:
     toc: true
     toc_float: true
-    includes:
-      before_body: defs.html
   pdf_document:
     toc: true
+    latex_engine: xelatex
 ---
 
-```{r include=FALSE}
+\newpage
+
+This report presents the submission of **Group 1** for the **Time Series Analysis and Machine Learning** course (HS-2025). There are two exercises in this assignment. **First**, we replicated both panels in *James — An Introduction to Statistical Learning with Applications in R* (Figure 6.4), which displayed the standardized ridge regression coefficients of the credit data set. **Second**, we explained how the two principal component lines in Figure 6.14 were derived, including their meaning and why they are orthogonal to each other.
+
+```{r setup, include=FALSE}
 library(knitr)
-options(digits=3, scipen=5)
-opts_chunk$set(echo=TRUE,
-               eval=TRUE,
-               fig.align='center',
-               comment="",
-               message=FALSE,
-               warning=FALSE,
-               cache=TRUE#,
-               ## tidy=TRUE, # switch on tidying of code
-               ## tidy.opts=list(comment=FALSE) # in particular, do not print comment lines in code
-               )
+opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
+# Exercise 1
 
+## 1. Data Preparation
 
+We started by importing the necessary libraries used throughout the project.
 
-# Chapter 6
-
-## Empirical Exercises
-
-
-### Exercise E6.1
-
-Load the data.
-```{r, eval=-3, echo=-3}
+```{r libraries}
+# Analysis and modeling toolkits
 library(readxl)
-db <- read_xlsx("../StockWatson/birthweight_smoking.xlsx")
-View(db)
+library(dplyr)
+library(purrr)
+
+# for lm.ridge
+library(MASS)   
 ```
 
-#### Part a.
+The raw credit_data.csv file is read and the binary Yes/No indicators for the predictors "Own","Student", and "Married" are converted into numeric binary variables. This conversion ensures that the model correctly interprets these predictors as binary inputs, with “Yes” corresponding to 1 and “No” to 0. 
 
-```{r}
-library(lmtest)
-library(sandwich)
-modelE6.1a <- lm(birthweight ~ smoker, data = db)
-coeftest(modelE6.1a, vcov = vcovHC(modelE6.1a, type = "HC1"))
-```
-According to this model, smoking reduces birth weight by $`r - modelE6.1a$coefficients[[2]]`$ grams, on average.
+```{r load-clean}
+# Load data and convert categorical Yes/No flags to 0/1 dummies
+data <- read.csv("credit_data.csv")
 
-
-
-#### Part b.
-
-Smoking may be correlated with both alcohol and the number of pre-natal doctor visits, thus satisfying (1) in Key Concept 6.1.  Moreover, both alcohol consumption and the number of doctor visits may have their own independent
-effects on birthweight, thus satisfying (2) in Key Concept 6.1. Excluding `alcohol` and `nprevist` from the model could hence lead to omitted variable bias.
-
-```{r}
-modelE6.1b <- lm(birthweight ~ smoker + alcohol + nprevist, data =  db)
-coeftest(modelE6.1b, vcov = vcovHC(modelE6.1b, type = "HC1"))
-```
-The estimated coefficient is somewhat smaller: it has fallen to $`r - modelE6.1b$coefficients[[2]]`$ grams from $`r - modelE6.1a$coefficients[[2]]`$ grams, so the regression in Part a. may suffer from omitted variable bias. 
-
-Create now a data frame with $X$ values for an individual such as Jane that smoked during pregnancy, did not drink alcohol and had eight prenatal care visits. Use it for predicting the birth weight of that individual's child.
-```{r}
-new.db <- data.frame(smoker=1, alcohol=0, nprevist=8)
-Jane <- predict(modelE6.1b, new.db)
+data$Student <- ifelse(data$Student == "Yes", 1, 0)
+data$Own     <- ifelse(data$Own     == "Yes", 1, 0)
+data$Married <- ifelse(data$Married == "Yes", 1, 0)
 ```
 
-The birth weight of Jane's child is predicted to be $`r Jane`$ grams. The unadjusted $R^ 2$ is equal to $`r summary(modelE6.1b)$r.squared`$ while is adjusted $\bar R^2$ is $`r summary(modelE6.1b)$adj.r.squared`$. The two are nearly identical because the sample size $n$ is very large relative to the
-number $k$ of regressors.
+The categorical predictor "Region" is transformed into three dummy variables representing the regions South, West, and East. These dummy variables are created without including an intercept (in order to avoid perfect multicollinearity), allowing each region to be treated as a separate category in the design matrix. The new indicator variables are appended to the dataset for subsequent analysis.
 
-
-#### Part c.
-
-This part illustrates the Frisch-Waugh theorem.
-
-```{r, echo=c(2:4,6:8,10:11)}
-## regress birthweight on alcohol and nprevist, and save residuals
-modelE6.1c1 <- lm(birthweight ~ alcohol + nprevist, data = db)
-bw_res <- residuals(modelE6.1c1)
-summary(modelE6.1c1)
-## regress smoker on alcohol and nprevist, and save residuals
-modelE6.1c2 <- lm(smoker ~ alcohol + nprevist, data = db) 
-smoker_res <- residuals(modelE6.1c2)
-summary(modelE6.1c2)
-## regress bw_res on smoker_res, omitting the constant term
-modelE6.1c3 <- lm(bw_res ~ -1 + smoker_res) 
-summary(modelE6.1c3)
+```{r region-dummies}
+# Build Region indicators and bind them to the main data frame
+region_dummies <- model.matrix(~ Region - 1, data = data)
+data <- cbind(data[ , !(names(data) %in% "Region")], region_dummies)
 ```
 
+After implementing the four modifications described above, the cleaned dataset is visualized to inspect for potential inconsistencies or data entry errors.
 
-#### Part d.
-```{r}
-modelE6.1d <- lm(birthweight ~ smoker + alcohol + tripre0 + tripre2 + tripre3, data = db)
-coeftest(modelE6.1d, vcov = vcovHC(modelE6.1d, type = "HC1"))
+```{r view-data, eval=FALSE}
+View(data)
 ```
 
-`Tripre1` is omitted to avoid perfect multicollinearity.  If it were included, R would arbitrarily exclude `Tripre3` as a result. Babies born to women who had no prenatal doctor visits (`Tripre0 = 1`) had birthweights that on
-average were `r modelE6.1d$coefficients[[4]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`). Babies born to women whose first doctor visit was during the second trimester (`Tripre2
-= 1`) had birthweights that on average were `r modelE6.1d$coefficients[[5]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`). Babies born to women whose first doctor visit was during
-the third trimester (`Tripre3 = 1`) had birthweights that on average were `r modelE6.1d$coefficients[[6]]` grams lower than babies from others who saw a doctor during the first trimester (`Tripre1 = 1`).
+## 2. Design Matrix Construction
 
+In this step, we identify the relevant predictors and the response variable to be used in our regression model. The predictor set includes both continuous variables (such as income, limit, and rating) and binary or categorical variables (such as married and region).
 
+To enhance the interpretability and comparability of the model, we standardize all predictors so that each has a mean of zero and a standard deviation of one. Standardization ensures that no variable dominates the estimation simply because it is measured in larger numeric units. It also allows ridge regression to apply the same degree of shrinkage to all coefficients, which improves the stability and comparability of the results.
 
-````{comment}
+Without standardization, the penalization term in ridge regression would depend not only on the regularization parameter $\lambda$ but also on the scale of the jth predictor (see formula 6.6).
 
-### Exercise E6.2 
+```{r design-matrix}
+# Define predictor matrix X and response vector Y
+X <- dplyr::select(
+  data,
+  Income, Limit, Rating, Cards, Age, Education,
+  Own, Student, Married,
+  RegionEast, RegionWest, RegionSouth
+)
+Y <- data$Balance
 
-Load the `Growth` dataset and exclude Malta from it:
-```{r, eval=-4, echo=-4}
-library(readxl)
-Growth <- read_excel("../StockWatson/Growth.xlsx")
-Growth1 <- Growth[Growth$country_name != 'Malta',]
-View(Growth1)
+# Standardize predictors to mean 0, variance 1
+# We work with the already build in scale function instead of the equation given in the book 
+X_standardized <- scale(X)
+X_std <- as.data.frame(X_standardized)
 ```
 
+## 3. Helper Functions
 
-#### Part a. 
-
-A neat table with summary statistics is available via the `describe` command of the `psych` package.
-```{r}
-library(psych)
-vars <- Growth1[,c("growth", "tradeshare", "yearsschool", "oil", "rev_coups", "assasinations", "rgdp60")]
-describe(vars, skew=FALSE)
-```
-The variable `growth` is measured in percent, `tradeshare` is a fraction of GDP, `yearsschoool` is measured in years, `oil` is a dummy variable, `rev_coups` and `assassinations` are count variables, and `rgdp60` is measured in US dollars.
-
-
-#### Part b.
-
-Estimate the linear regression using OLS. Remember to load the `lmtest` and `sandwich` packages for the summary table and heteroscedasticty-robust standard errors.
-
-```{r}
-library(lmtest)
-library(sandwich)
-modelE6.2b <- lm(growth ~ tradeshare + yearsschool + rev_coups + assasinations + rgdp60, data = Growth1)
-coeftest(modelE6.2b, vcovHC(modelE6.2b, type = "HC1"))
-```
-The coefficient on `rev_coups` is $-2.15$. This implies that one additional coup d'etat in those 35 years reduces annual GDP growth by 2.15% per year on average. If the coup happens in 1960 then the GDP in 1995 would be $2.15\% \cdot 35 = 75.25\%$ lower. This is a large effect. 
-
-
-#### Part c. 
-
-To compute the fitted values at the regressors' averages, use the `predict` command, whose `newdata` argument contains a dataframe with the averages, appropriately named. Note that the dataframe of averages must have column labels
-in order to be recognised by `predict`, hence the transposition of the vector `avg`.
-
-```{r}
-avg <- colMeans(Growth1[,variable.names(modelE6.2b)[-1]])
-avg <- as.data.frame(t(avg))
-predict(modelE6.2b, newdata = avg)[[1]]
-
-```
-The predicted growth rate at the mean values for all regressors is hence `r round(predict(modelE6.2b, newdata = avg), 2)`.
-
-#### Part d.
-
-```{r, echo=FALSE}
-sd <- sd(data.matrix(Growth1[,"tradeshare"]))
-avgnew <- avg
-avgnew[1,1] <- avgnew[1,1] + sd
-predict(modelE6.2b, newdata = avgnew)[[1]]
-```
-Add one standard deviation to average tradeshare to find that the predicted growth rate is `r round(predict(modelE6.2b, newdata = avgnew), 2)`.
-
-
-#### Part e. 
-
-Recall that the variable `oil` takes on the value of 0 for all 64 countries in the sample. Including it would generate perfect multicollinearity, since `oil` is a linear combination of the constant regressor.
-
-````
-
-
-
-
-# Chapter 7
-
-## Empirical Exercises
-
-
-### Exercise E7.1
-
-Load the data. Estimate the three regression models, using heteroscedasticity-robust standard errors. Display the results in a table.
-
-```{r}
-library(readxl)
-db <- read_xlsx("../StockWatson/birthweight_smoking.xlsx")
-
-modelE7.1i <- lm(birthweight ~ smoker, data = db)
-modelE7.1ii <- lm(birthweight ~ smoker + alcohol + nprevist, data = db)
-modelE7.1iii <- lm(birthweight ~ smoker + alcohol + nprevist + unmarried, data = db)
-
-library(sandwich)
-robseE7.1i <- sqrt(diag(vcovHC(modelE7.1i, type = "HC1")))
-robseE7.1ii <- sqrt(diag(vcovHC(modelE7.1ii, type = "HC1")))
-robseE7.1iii <- sqrt(diag(vcovHC(modelE7.1iii, type = "HC1")))
-
-library(stargazer)
-stargazer(modelE7.1i, modelE7.1ii, modelE7.1iii, 
-          se=list(robseE7.1i, robseE7.1ii, robseE7.1iii),
-          title="Regression Results", type="text",
-          df=FALSE)
-```
-
-#### Part a.
-
-Smoking is estimated to decrease birth weight by `r - modelE7.1i$coefficients[[2]]`, `r - modelE7.1ii$coefficients[[2]]` and `r - modelE7.1iii$coefficients[[2]]` grams, respectively.
-
-
-#### Part b.
-
-The corresponding 95% confidence intervals are
+To make the analysis easier and more consistent, we define two short helper functions that perform the key calculations used throughout the report.  
+The first function computes the ridge regression coefficients for a given value of the regularization parameter `lambda` following the model:
 $$
-\begin{align*}
-[`r modelE7.1i$coefficients[[2]] - qnorm(0.975)*robseE7.1i[[2]]` &, `r modelE7.1i$coefficients[[2]] + qnorm(0.975)*robseE7.1i[[2]]`] \\
-[`r modelE7.1ii$coefficients[[2]] - qnorm(0.975)*robseE7.1ii[[2]]` &, `r modelE7.1ii$coefficients[[2]] + qnorm(0.975)*robseE7.1ii[[2]]`] \\
-[`r modelE7.1iii$coefficients[[2]] - qnorm(0.975)*robseE7.1iii[[2]]` &, `r modelE7.1iii$coefficients[[2]] + qnorm(0.975)*robseE7.1iii[[2]]`] \\
-\end{align*}
+\hat{\beta}_{\lambda} = \underset{\beta}{\arg\min} 
+\left\{
+\sum_{i=1}^{n} (y_i - x_i^\top \beta)^2 + 
+\lambda \sum_{j=1}^{p} \beta_j^2
+\right\}
 $$
-respectively.
+The second function computes the ordinary least squares (OLS) coefficients without an intercept following the model: 
+$$
+\hat{\beta}_{OLS} = \underset{\beta}{\arg\min}
+\left\{
+\sum_{i=1}^{n} (y_i - x_i^\top \beta)^2
+\right\}
+$$
 
+```{r helper-functions}
+# Ridge coefficients for a chosen penalty lambda
+# Brauchen wir inter = false und scales = trues -> hat lm.ride diese Argumente? 
+compute_coefficients <- function(lambda, X, y) {
+  ridge_fit <- lm.ridge(y ~ as.matrix(X),
+                        lambda = lambda,
+                        Inter = FALSE,
+                        scales = TRUE)
+  coef(ridge_fit)
+}
 
-
-#### Part c.
-Yes it seems so. The coefficient of `smoker` falls by roughly 15% in magnitude when `alcohol` and `nprevist` are added to the regression.  This change is large relative to the standard error in (1).
-
-
-#### Part d.
-Yes it seems so. The coefficient of `smoker` falls by roughly 20% in magnitude when `unmarried` is added as an additional regressor.  Again, this change is large relative to the standard error in (2). 
-
-
-#### Part e.
-
-The 95% confidence interval is given by $[`r modelE7.1iii$coefficients[[5]] - qnorm(0.975)*robseE7.1iii[[5]]`, `r modelE7.1iii$coefficients[[5]] + qnorm(0.975)*robseE7.1iii[[5]]`]$. It does not include zero, so the coefficient is
-statistically significantly different from zero. The coefficient seems large since, on average, birthweight is `r - modelE7.1iii$coefficients[[5]]` grams lower for unmarried mothers. Such public policies are unlikely to lead to
-healthier babies, since `unmarried` is a control variable that captures the effects of several factors that differ between married and unmarried mothers such as age, education, income, diet, other health factors, and so forth.
-
-
-#### Part f.
-
-```{r}
-library(stargazer)
-modelE7.1f <- lm(birthweight ~ smoker + alcohol + nprevist + unmarried + age + educ, data = db)
-robseE7.1f <- sqrt(diag(vcovHC(modelE7.1f, type = "HC1")))
-stargazer(modelE7.1f,
-          se=list(robseE7.1f),
-          title="Regression Results", type="text",
-          df=FALSE)
-```
-Including `age` and `educ` in the model results in a coefficient on `smoker` that is  very similar to its value in regression model (3) above.
-
-
-
-````{comment}
-
-### Exercise E7.2
-
-Load the data.
-
-```{r}
-library(readxl)
-EnH <- read_excel("../StockWatson/Earnings_and_Height.xlsx")
+# OLS coefficients with no intercept (keeps all dummies)
+compute_ols <- function(X, y) {
+  df <- data.frame(y = y, X)
+  fit <- lm(y ~ . - 1, data = df)
+  b <- coef(fit)
+  b[colnames(X)]
+}
 ```
 
+Compute the OLS coefficients once for later comparisons.
 
-#### Part a.
-
-According to Key Concept 6.1, omitted variable bias arises if:
-
- 1. the regressor $X$ is correlated with the omitted variable, and
- 2. the omitted variable is a determinant of the dependent variable $Y$.
- 
-The mechanism described in the question explains why the regressor `height` and the omitted variable `cognitive ability` are correlated and why `cognitive ability` is a determinant of the depedend variable `earnings`.  This
-mechanism suggests that height and cognitive ability are positively correlated and that cognitive ability has a positive effect on earnings. Thus, the regressor will be positively correlated with the error, leading to a positive
-bias in the estimated coefficient.
-
-
-#### Part b.
-
-Create the suggested variables:
-```{r}
-EnH$LT_HS <- with(EnH, ifelse(educ < 12, 1, 0))
-EnH$HS <- with(EnH, ifelse(educ == 12, 1, 0))
-EnH$Some_Col <- with(EnH, ifelse( educ > 12 & educ < 16, 1, 0))
-EnH$College <- with(EnH, ifelse(educ >= 16, 1, 0))
+```{r ols-coefs}
+ols_coefficients <- compute_ols(X_std, Y)
 ```
 
-and create subsets of the data for men and women:
-```{r}
-EnH_female <- subset(EnH, EnH$sex == "0")
-EnH_male <- subset(EnH, EnH$sex == "1")
+## 4. Ridge Paths Across Lambda Grid
+
+In this section, we examine how the estimated coefficients change as the regularization strength `lambda` increases.  
+To do this, we define a sequence of 100 `lambda` values that span a wide range—from very small values (close to ordinary least squares) to very large ones (strong shrinkage).
+
+For each `lambda`, the ridge regression is re-estimated, and the resulting coefficients are stored.  
+This creates a set of “ridge paths” that show how each variable’s influence gradually shrinks toward zero as the penalty grows.  
+
+```{r ridge-grid}
+# Log-spaced lambda grid
+lambdas <- 10^seq(-2, 5, length.out = 100)
+
+# Collect ridge coefficients for every lambda
+coefficients <- sapply(lambdas, function(lambda) {
+  compute_coefficients(lambda, X_std, Y)
+})
+
+# Clean up into a data frame
+df <- t(coefficients)
+df <- df[, -1]  # drop intercept column added by lm.ridge
+colnames(df) <- gsub("as\\.matrix\\(X\\)", "", colnames(df))
+df <- cbind(lambda = lambdas, df)
+df <- as.data.frame(df)
 ```
 
-Estimate now the regression models for women only, construct heteroscedasticty-robust standard errors, and display the results.
-```{r}
-library(sandwich)
-library(stargazer)
-modelE7.2b1 <- lm(earnings ~ height, data= EnH_female)
-modelE7.2b2 <- lm(earnings ~ height + LT_HS + HS + Some_Col + College, data= EnH_female)
-robseE7.2b1 <- sqrt(diag(vcovHC(modelE7.2b1, type = "HC1")))
-robseE7.2b2 <- sqrt(diag(vcovHC(modelE7.2b2, type = "HC1")))
-stargazer(modelE7.2b1, modelE7.2b2,
-          se=list(robseE7.2b1, robseE7.2b2),
-          title="Regression Results",
-          type="text",
-          df=FALSE,
-          digits=3)
+## 5. Norm Calculations
+
+In this step, we compare the overall size of the ridge coefficients to the OLS coefficients.  
+We do this by computing their ℓ₂ norms, which measure the combined magnitude of all estimated coefficients.  
+As the regularization strength `lambda` increases, the ridge coefficients shrink, and their norm becomes smaller relative to the OLS solution.  
+
+The resulting ratio (ridge norm divided by OLS norm) provides a convenient way to express the degree of shrinkage on a standardized 0–1 scale.  
+This ratio will later serve as a rescaled x-axis when visualizing how coefficients change with increasing regularization.
+
+The ratio is given by:
+
+$$
+\frac{ \| \hat{\beta}_{\lambda}^{R} \|_{2} }
+     { \| \hat{\beta}_{OLS} \|_{2} }
+= 
+\frac{ \sqrt{ \sum_{j=1}^{p} \left( \hat{\beta}_{j,\lambda}^{R} \right)^{2} } }
+       { \sqrt{ \sum_{j=1}^{p} \left( \hat{\beta}_{j,OLS} \right)^{2} } }
+$$
+
+```{r norms}
+# Ridge ℓ2 norm per lambda
+ridge_norms <- apply(df[, !(names(df) %in% "lambda")], 1,
+                     function(row) sqrt(sum(row^2)))
+print(ridge_norms)
+
+# OLS ℓ2 norm (drop NA caused by omitted dummy)
+ols_norm <- sqrt(sum(ols_coefficients^2, na.rm = TRUE))
+print(ols_norm)
+
+# Attach the ridge/OLS norm ratio to the data frame
+df$norm_ratio <- ridge_norms / ols_norm
 ```
 
-The estimated coefficient on `height` falls by approximately 75%, from `r modelE7.2b1$coefficients[[2]]` to `r modelE7.2b2$coefficients[[2]]` when the education variables are added as control variables in the regression. This is
-consistent with positive omitted bias in the first model.
+The following provides a review of the final coefficient table.
 
-Yet `College` is dropped from the model automatically since it is perfectly collinear with the other education dummies and the constant term.
-
-For an F-test on the relevance of the education variables, estimate the model without `College` again to actively avoid the dummy variable trap. The `car` package has the convenient `lht` command for testing joint null hypotheses.
-
-```{r}
-modelE7.2b2 <- lm(earnings ~ height + LT_HS + HS + Some_Col, data= EnH_female)
-library(car)
-Ftest <- lht(modelE7.2b2, c("LT_HS = 0", "HS = 0", "Some_Col = 0"), white.adjust = "hc1")
-Ftest
+```{r view-df, eval=FALSE}
+View(df)
 ```
 
-The F-statistic is `r Ftest$F[[2]]`, which is larger than the 1% critical value of `r qf(0.99, 3, Inf)`, taken from the $F (3,\infty)$-distribution. Therefore, the null hypothesis that the coefficients on the education variables are
-jointly equal to zero is rejected at the 1% significance level.
+## 6. Visualization
 
-The coefficients measure the effect of education on earnings relative to the omitted category, which is `College`. Thus, the estimated coefficient on regressor `LS_HS` implies that workers with less than a high school education on
-average earn \$`r -modelE7.2b2$coefficients[[3]]` less per year than a college graduate. A worker with a high school education earns on average \$`r -modelE7.2b2$coefficients[[4]]` less per year than a college graduate. And a
-worker with a some college educaton on average earns \$`r -modelE7.2b2$coefficients[[5]]` less per year than a college graduate.
+Ensure a `figures/` folder exists and save both figures to disk.
 
-
-#### Part c.
-
-Repeating the analysis for men, yields
-```{r}
-library(stargazer)
-modelE7.2c1 <- lm(earnings ~ height, data=EnH_male)
-modelE7.2c2 <- lm(earnings ~ height + LT_HS + HS + Some_Col, data=EnH_male)
-robseE7.2c1 <- sqrt(diag(vcovHC(modelE7.2c1, type = "HC1")))
-robseE7.2c2 <- sqrt(diag(vcovHC(modelE7.2c2, type = "HC1")))
-stargazer(modelE7.2c1, modelE7.2c2,
-          se=list(robseE7.2c1, robseE7.2c2),
-          title="Regression Results",
-          type="text",
-          df=FALSE,
-          digits=3)
-lht(modelE7.2c2, c("LT_HS = 0", "HS = 0", "Some_Col = 0"), white.adjust = "hc1")
+```{r prepare-figures}
+if (!dir.exists("figures")) dir.create("figures")
 ```
-The results are qualitatively similar to those for women.
 
-````
+### 6.1 Lambda-on-Log-Scale Plot
 
+This plot shows how each standardized coefficient changes as the regularization strength `lambda` increases, using a logarithmic x-axis.  
+At small values of `lambda`, the model behaves like OLS with little shrinkage, while larger values gradually pull the coefficients toward zero.  
+The highlighted variables (Income, Limit, Rating, and Student) represent the most influential predictors, while the others are shown in gray for context.  
+Overall, the plot illustrates how ridge regression balances model complexity and stability by progressively reducing the size of the coefficients.
+
+```{r figure-1, fig.width=6, fig.height=7}
+png("figures/figure_6.4_1.png", width = 768, height = 889, res = 120)
+
+plot(df$lambda, df$Income, type = "l", log = "x", lwd = 2,
+     ylim = c(-300, 450), col = "black",
+     xlab = expression(lambda),
+     ylab = "Standardized Coefficients",
+     xaxt = "n", yaxt = "n")
+axis(side = 1, at = c(0.01, 1, 100, 10000),
+     labels = c("1e-02", "1e+00", "1e+02", "1e+04"))
+axis(side = 2, at = seq(-300, 400, by = 100),
+     labels = seq(-300, 400, by = 100))
+
+# Highlighted series
+lines(df$lambda, df$Limit,   col = "red",        lty = 2, lwd = 2)
+lines(df$lambda, df$Rating,  col = "blue",       lty = 3, lwd = 2)
+lines(df$lambda, df$Student, col = "goldenrod2", lty = 4, lwd = 2)
+
+# Remaining predictors in gray
+lines(df$lambda, df$Cards,       col = "grey70")
+lines(df$lambda, df$Age,         col = "grey70")
+lines(df$lambda, df$Education,   col = "grey70")
+lines(df$lambda, df$Own,         col = "grey70")
+lines(df$lambda, df$Married,     col = "grey70")
+lines(df$lambda, df$RegionEast,  col = "grey70")
+lines(df$lambda, df$RegionWest,  col = "grey70")
+lines(df$lambda, df$RegionSouth, col = "grey70")
+
+legend("topright",
+       legend = c("Income", "Limit", "Rating", "Student"),
+       col = c("black", "red", "blue", "goldenrod2"),
+       lty = c(1, 2, 3, 4),
+       lwd = 2,
+       bty = "n",
+       cex = 1.2)
+
+dev.off()
+```
+
+### 6.2 Norm-Ratio Plot
+
+This plot presents the same coefficient paths as before but uses the ratio of the ridge to OLS ℓ₂ norms on the x-axis instead of `lambda`.  
+This ratio provides a standardized measure of shrinkage that ranges from 1 (no regularization, same as OLS) to 0 (maximum shrinkage).  
+By expressing shrinkage as a relative measure rather than a raw penalty value, this visualization makes it easier to compare the degree of regularization across different models or datasets.
+
+```{r figure-2, fig.width=6, fig.height=7}
+df_ratio <- df[order(df$norm_ratio), ]
+
+png("figures/figure_6.4_2.png", width = 768, height = 889, res = 120)
+
+plot(df_ratio$norm_ratio, df_ratio$Income, type = "l", lwd = 2,
+     xlim = c(0, 1), ylim = c(-300, 450), col = "black",
+     xlab = expression("||" * hat(beta)[lambda]^R * "||"[2] / "||" * hat(beta) * "||"[2]),
+     ylab = "Standardized Coefficients")
+
+lines(df_ratio$norm_ratio, df_ratio$Limit,   col = "red",        lty = 2, lwd = 2)
+lines(df_ratio$norm_ratio, df_ratio$Rating,  col = "blue",       lty = 3, lwd = 2)
+lines(df_ratio$norm_ratio, df_ratio$Student, col = "goldenrod2", lty = 4, lwd = 2)
+
+lines(df_ratio$norm_ratio, df_ratio$Cards,       col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$Age,         col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$Education,   col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$Own,         col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$Married,     col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$RegionEast,  col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$RegionWest,  col = "grey70")
+lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70")
+
+dev.off()
+```
+
+## 7. Interpretation Guide
+
+- The ridge paths illustrate how each standardized coefficient shrinks toward zero as `lambda` grows, with Student reacting more quickly than Income/Limit/Rating.
+- The norm-ratio axis recasts shrinkage strength on a common 0–1 scale: values near 1 behave like OLS; values near 0 indicate heavy penalization.
+
+
+
+# Exercise 2
+
+Exercise 2 is split in three parts:
+1. Explain in detail how the two lines in Figure 6.14 are derived.
+2. What do they mean?
+3. Why are they orthogonal to each other?
+
+```{r, echo=FALSE, fig.cap="", out.width='70%', fig.align='center'}
+knitr::include_graphics("figures/figure_6.14.jpg")
+```
+
+The population size (pop) and ad spending (ad) for 100 different cities are shown as purple circles. The green solid line indicates the first principal component, and the blue dashed line indicates the second principal component.
+
+## Overview
+
+The overarching topic of this exercise is principal-component-analysis (PCA) with non-standardized variables population size (pop) and ad spending (ad). PCA is a dimension reduction technique to reduce the predictor space p to M principal components, which are linear combinations of the p variables.
+
+## Derivation of principal components
+
+Principal components (PC) are denoted as $Z_1, Z_2, \ldots, Z_M$, where $M$ is the number of principal components.  
+Each principal component is a linear combination of the original predictors $X_1, X_2, \ldots, X_p$.
+
+In our case, we can, at most, derive two principal components as we have two variables. Our PCs take the form $PC_i = a\cdot\text{pop} + b\cdot\text{ad}$ with $a, b$ being the principal component loadings (also referred to as weights).
+
+To derive the first principal component, we want to find a linear combination of $\text{pop}$ and $\text{ad}$ that captures the maximum variance in the input variables while minimizing the sum of the squared perpendicular distances between each point and the line.
+
+For this, it is vital to restrict $a, b$ because they would otherwise blow up the variance arbitrarily. Therefore, we can only consider linear combination of the form $a^2 + b^2 = 1$.
+
+We are now maximizing this variance using the Lagrange method:
+
+$$\max \text{Var}(a\cdot\text{pop} + b\cdot\text{ad}) \quad \text{s.t.} \quad a^2 + b^2 = 1$$
+For the case that $X_1$ and $X_2$ are standardized variables (mean equal to zero, variance equal to one), there is a simple, analytical solution to the maximization problem:
+
+The Lagrangian function is:
+
+$$(*)\quad \mathcal{L}(a, b, \lambda) = a^2 \cdot Var({X_1)} + b^2 \cdot Var({X_2)} + 2ab \cdot Cov(X_1,X_2) + \lambda(a^2 + b^2 - 1)$$
+As we work with standardized predictors, the variance (and thus also the standard deviation) equals one. We can thus drop the variance term and set the covariance equal to the correlation. Hence, the equation simplifies as follows:
+
+$$(**)\quad \mathcal{L}(a, b, \lambda) = a^2 + b^2 + 2ab \cdot \rho + \lambda(a^2 + b^2 - 1)$$
+To continue, we are defining the three conditions for the maximization problem. First, we take the two partial derivatives of the Lagrangian with respect to $a$ and $b$ and then include our constraint as the third equation:
+
+$$(1) \quad \frac{\partial \mathcal{L}}{\partial a} = 2a + 2b \cdot \rho + \lambda \cdot 2a \stackrel{!}{=} 0$$
+
+$$(2) \quad \frac{\partial \mathcal{L}}{\partial b} = 2b + 2a \cdot \rho + \lambda \cdot 2b \stackrel{!}{=} 0$$
+
+$$(3) \quad a^2 + b^2 = 1$$
+
+Solving this system of equations, yields the first principal component:
+
+$$PC_1 = \frac{1}{\sqrt{2}} X_1 + \frac{1}{\sqrt{2}} X_2$$
+
+However, this derivation assumes standardization of variables which is not the case in the given example (pop and ad are solely mean adjusted). Thus, while the initial equation $(*)$ still holds, it does no longer simplify to $(**)$ as the variance (and hence the standard deviation) is not necessarily equal to one.
+
+The idea of the maximization problem is still the same and results in the following:
+
+$$\max \text{Var}(aX_1 + bX_2) = \max \ a^2 \sigma_{X_1}^2 + b^2 \sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1X_2} \quad \text{s.t.} \quad a^2 + b^2 = 1$$
+
+The corresponding Lagrangian function is:
+
+$$\mathcal{L}(a, b, \lambda) = a^2 \cdot \sigma_{X_1}^2 + b^2 \cdot \sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1X_2} + \lambda(a^2 + b^2 - 1)$$
+
+This gives us the following three conditions:
+
+$$\frac{\partial \mathcal{L}}{\partial a} = 2a \cdot \sigma_{X_1}^2 + 2b \cdot \sigma_{X_1X_2} + \lambda \cdot 2a \stackrel{!}{=} 0$$
+
+$$\frac{\partial \mathcal{L}}{\partial b} = 2b \cdot \sigma_{X_2}^2 + 2a \cdot \sigma_{X_1X_2} + \lambda \cdot 2b \stackrel{!}{=} 0$$
+
+$$a^2 + b^2 = 1$$
+
+Solving this set of equations for $a$ and $b$ is not possible as we don't have access to the data set used.
+
+The data used in the book gives us the loadings $a=0.839$ and $b=0.544$, resulting in the equation for the first principal component:
+
+$$Z_1 = 0.839 \times (\text{pop} - \overline{\text{pop}}) + 0.544 \times (\text{ad} - \overline{\text{ad}})$$
+$PC_2$ explains the rest of the variance in the data that is not captured by $PC_1$. Hence $PC_2$ has to be uncorrelated with $PC_1$.
+
+$$\begin{bmatrix} a_1 \\ b_1 \end{bmatrix} \cdot \begin{bmatrix} a_2 \\ b_2 \end{bmatrix} = 0$$
+
+$$a_1 \cdot a_2 + b_1 \cdot b_2 = 0$$
+
+$$0.839 \cdot a_2 + 0.544 \cdot b_2 = 0$$
+
+$$\Rightarrow (a_2, b_2) = (0.544, -0.839)$$
+
+$$Z_2 = 0.544 \times (\text{pop} - \overline{\text{pop}}) - 0.839 \times (\text{ad} - \overline{\text{ad}})$$
+
+## Summary
+
+With the previous calculations, we found the linear combinations of predictors that explain the highest variance in the predictors. The first principal component, depicted as the green line in figure 6.14 is the component that captures the most variance in the scatter plot and passes directly through the cloud in the direction that has the greatest spread of data. Hence $PC_1$ can be used to reduce the dimensions of predictors from two to one while capturing the highest degree of variance possible in the initial variables.
 
