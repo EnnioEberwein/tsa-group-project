@@ -2,7 +2,7 @@
 title: 'Group 1 – Ridge Regression and Principal Component Analysis'
 subtitle: 'Time Series Analysis and Machine Learning (HS-2025)'
 author: "Ennio Eberwein, Daria Göbel, Patrick Trost"
-date: 'version 1: 18th Novemeber 2025'
+date: '19th Novemeber 2025'
 output:
   html_document:
     toc: true
@@ -10,6 +10,7 @@ output:
   pdf_document:
     toc: true
     latex_engine: xelatex
+knit: (function(input, ...) { rmarkdown::render(input, output_dir = "output", output_format = "all") })
 ---
 
 \newpage
@@ -28,16 +29,11 @@ opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 We started by importing the necessary libraries used throughout the project.
 
 ```{r libraries}
-# Analysis and modeling toolkits
-library(readxl)
-library(dplyr)
-library(purrr)
-
 # for lm.ridge
-library(MASS)   
+library(MASS)
 ```
 
-The raw credit_data.csv file is read and the binary Yes/No indicators for the predictors "Own","Student", and "Married" are converted into numeric binary variables. This conversion ensures that the model correctly interprets these predictors as binary inputs, with “Yes” corresponding to 1 and “No” to 0. 
+The raw credit_data.csv file is read and the binary Yes/No indicators for the predictors "Own","Student", and "Married" are converted into numeric binary variables. This conversion ensures that the model correctly interprets these predictors as binary inputs, with “Yes” corresponding to 1 and “No” corresponding to 0.
 
 ```{r load-clean}
 # Load data and convert categorical Yes/No flags to 0/1 dummies
@@ -68,7 +64,7 @@ In this step, we identify the relevant predictors and the response variable to b
 
 To enhance the interpretability and comparability of the model, we standardize all predictors so that each has a mean of zero and a standard deviation of one. Standardization ensures that no variable dominates the estimation simply because it is measured in larger numeric units. It also allows ridge regression to apply the same degree of shrinkage to all coefficients, which improves the stability and comparability of the results.
 
-Without standardization, the penalization term in ridge regression would depend not only on the regularization parameter $\lambda$ but also on the scale of the jth predictor (see formula 6.6).
+Without standardization, the penalization term in ridge regression would depend not only on the regularization parameter $\lambda$ but also on the scale of the $j$th predictor (see formula 6.6).
 
 ```{r design-matrix}
 # Define predictor matrix X and response vector Y
@@ -107,12 +103,8 @@ $$
 
 ```{r helper-functions}
 # Ridge coefficients for a chosen penalty lambda
-# Brauchen wir inter = false und scales = trues -> hat lm.ride diese Argumente? 
 compute_coefficients <- function(lambda, X, y) {
-  ridge_fit <- lm.ridge(y ~ as.matrix(X),
-                        lambda = lambda,
-                        Inter = FALSE,
-                        scales = TRUE)
+  ridge_fit <- lm.ridge(y ~ as.matrix(X), lambda = lambda)
   coef(ridge_fit)
 }
 
@@ -179,11 +171,9 @@ $$
 # Ridge ℓ2 norm per lambda
 ridge_norms <- apply(df[, !(names(df) %in% "lambda")], 1,
                      function(row) sqrt(sum(row^2)))
-print(ridge_norms)
 
 # OLS ℓ2 norm (drop NA caused by omitted dummy)
 ols_norm <- sqrt(sum(ols_coefficients^2, na.rm = TRUE))
-print(ols_norm)
 
 # Attach the ridge/OLS norm ratio to the data frame
 df$norm_ratio <- ridge_norms / ols_norm
@@ -210,9 +200,7 @@ At small values of `lambda`, the model behaves like OLS with little shrinkage, w
 The highlighted variables (Income, Limit, Rating, and Student) represent the most influential predictors, while the others are shown in gray for context.  
 Overall, the plot illustrates how ridge regression balances model complexity and stability by progressively reducing the size of the coefficients.
 
-```{r figure-1, fig.width=6, fig.height=7}
-png("figures/figure_6.4_1.png", width = 768, height = 889, res = 120)
-
+```{r figure-1, fig.width=6, fig.height=7, out.width='50%', dpi=200, fig.align='center'}
 plot(df$lambda, df$Income, type = "l", log = "x", lwd = 2,
      ylim = c(-300, 450), col = "black",
      xlab = expression(lambda),
@@ -245,8 +233,6 @@ legend("topright",
        lwd = 2,
        bty = "n",
        cex = 1.2)
-
-dev.off()
 ```
 
 ### 6.2 Norm-Ratio Plot
@@ -255,10 +241,8 @@ This plot presents the same coefficient paths as before but uses the ratio of th
 This ratio provides a standardized measure of shrinkage that ranges from 1 (no regularization, same as OLS) to 0 (maximum shrinkage).  
 By expressing shrinkage as a relative measure rather than a raw penalty value, this visualization makes it easier to compare the degree of regularization across different models or datasets.
 
-```{r figure-2, fig.width=6, fig.height=7}
+```{r figure-2, fig.width=6, fig.height=7, out.width='50%', dpi=200, fig.align='center'}
 df_ratio <- df[order(df$norm_ratio), ]
-
-png("figures/figure_6.4_2.png", width = 768, height = 889, res = 120)
 
 plot(df_ratio$norm_ratio, df_ratio$Income, type = "l", lwd = 2,
      xlim = c(0, 1), ylim = c(-300, 450), col = "black",
@@ -277,20 +261,19 @@ lines(df_ratio$norm_ratio, df_ratio$Married,     col = "grey70")
 lines(df_ratio$norm_ratio, df_ratio$RegionEast,  col = "grey70")
 lines(df_ratio$norm_ratio, df_ratio$RegionWest,  col = "grey70")
 lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70")
-
-dev.off()
 ```
 
 ## 7. Interpretation Guide
 
-- The ridge paths illustrate how each standardized coefficient shrinks toward zero as `lambda` grows, with Student reacting more quickly than Income/Limit/Rating.
+- The ridge paths illustrate how each standardized coefficient shrinks toward zero as $\lambda$ grows, with Student reacting more quickly than Income/Limit/Rating.
 - The norm-ratio axis recasts shrinkage strength on a common 0–1 scale: values near 1 behave like OLS; values near 0 indicate heavy penalization.
 
-
+\newpage
 
 # Exercise 2
 
 Exercise 2 is split in three parts:
+
 1. Explain in detail how the two lines in Figure 6.14 are derived.
 2. What do they mean?
 3. Why are they orthogonal to each other?
@@ -299,80 +282,55 @@ Exercise 2 is split in three parts:
 knitr::include_graphics("figures/figure_6.14.jpg")
 ```
 
-The population size (pop) and ad spending (ad) for 100 different cities are shown as purple circles. The green solid line indicates the first principal component, and the blue dashed line indicates the second principal component.
-
 ## Overview
 
-The overarching topic of this exercise is principal-component-analysis (PCA) with non-standardized variables population size (pop) and ad spending (ad). PCA is a dimension reduction technique to reduce the predictor space p to M principal components, which are linear combinations of the p variables.
+The two predictors population size (pop) and ad spending (ad) for 100 different cities are shown as purple circles. The green solid line indicates the first principal component, and the blue dashed line indicates the second principal component. 
+
+Principal-Component-Analysis (PCA) is a dimension reduction technique to reduce the predictor space $P$ to $M$ principal components, which are linear combinations of the $p$ variables. The overarching topic of this exercise is to understand how PCA uses the non-standardized variables pop and ad to constructs those components.
 
 ## Derivation of principal components
 
-Principal components (PC) are denoted as $Z_1, Z_2, \ldots, Z_M$, where $M$ is the number of principal components.  
+Principal components (PC) are denoted as $Z_1, Z_2, \ldots, Z_M$ where $M$ is the number of principal components.  
 Each principal component is a linear combination of the original predictors $X_1, X_2, \ldots, X_p$.
 
-In our case, we can, at most, derive two principal components as we have two variables. Our PCs take the form $PC_i = a\cdot\text{pop} + b\cdot\text{ad}$ with $a, b$ being the principal component loadings (also referred to as weights).
+In our case, we can, at most, derive two principal components as we have two variables. Our PCs take the form $PC_i = a\cdot\text{pop} + b\cdot\text{ad}$ with $a, b$ being the *principal component loadings*.
 
-To derive the first principal component, we want to find a linear combination of $\text{pop}$ and $\text{ad}$ that captures the maximum variance in the input variables while minimizing the sum of the squared perpendicular distances between each point and the line.
+To derive the first principal component, we want to find a linear combination of $\text{pop}$ and $\text{ad}$ that captures the maximum variance of those input variables. This is equivalent tominimizing the sum of the squared perpendicular distances between each data point and the line constructed by the linear combination, i.e. the principal component.
 
 For this, it is vital to restrict $a, b$ because they would otherwise blow up the variance arbitrarily. Therefore, we can only consider linear combination of the form $a^2 + b^2 = 1$.
 
 We are now maximizing this variance using the Lagrange method:
-
-$$\max \text{Var}(a\cdot\text{pop} + b\cdot\text{ad}) \quad \text{s.t.} \quad a^2 + b^2 = 1$$
-For the case that $X_1$ and $X_2$ are standardized variables (mean equal to zero, variance equal to one), there is a simple, analytical solution to the maximization problem:
-
-The Lagrangian function is:
-
+$$\max_{\text{pop},\text{ad}}\ \text{Var}(a\cdot\text{pop} + b\cdot\text{ad}) \quad \text{s.t.} \quad a^2 + b^2 = 1$$
+For two general predictors $X_1$ and $X_2$, the Lagrangian function thus results in:
 $$(*)\quad \mathcal{L}(a, b, \lambda) = a^2 \cdot Var({X_1)} + b^2 \cdot Var({X_2)} + 2ab \cdot Cov(X_1,X_2) + \lambda(a^2 + b^2 - 1)$$
-As we work with standardized predictors, the variance (and thus also the standard deviation) equals one. We can thus drop the variance term and set the covariance equal to the correlation. Hence, the equation simplifies as follows:
-
-$$(**)\quad \mathcal{L}(a, b, \lambda) = a^2 + b^2 + 2ab \cdot \rho + \lambda(a^2 + b^2 - 1)$$
+For the case that $X_1$ and $X_2$ are standardized variables, there is a simple, analytical solution to the maximization problem. As the variance (and thus also the standard deviation) equals one, we can drop the variance term and set the covariance equal to the correlation. Hence, the equation simplifies as follows:
+$$(**)\quad \mathcal{L}(a, b, \lambda) = a^2 + b^2 + 2ab \cdot \rho_{X_1,X_2} + \lambda(a^2 + b^2 - 1)$$
 To continue, we are defining the three conditions for the maximization problem. First, we take the two partial derivatives of the Lagrangian with respect to $a$ and $b$ and then include our constraint as the third equation:
-
-$$(1) \quad \frac{\partial \mathcal{L}}{\partial a} = 2a + 2b \cdot \rho + \lambda \cdot 2a \stackrel{!}{=} 0$$
-
-$$(2) \quad \frac{\partial \mathcal{L}}{\partial b} = 2b + 2a \cdot \rho + \lambda \cdot 2b \stackrel{!}{=} 0$$
-
+$$(1) \quad \frac{\partial \mathcal{L}}{\partial a} = 2a + 2b \cdot \rho_{X_1,X_2} + \lambda \cdot 2a \stackrel{!}{=} 0$$
+$$(2) \quad \frac{\partial \mathcal{L}}{\partial b} = 2b + 2a \cdot \rho_{X_1,X_2} + \lambda \cdot 2b \stackrel{!}{=} 0$$
 $$(3) \quad a^2 + b^2 = 1$$
-
 Solving this system of equations, yields the first principal component:
-
 $$PC_1 = \frac{1}{\sqrt{2}} X_1 + \frac{1}{\sqrt{2}} X_2$$
-
-However, this derivation assumes standardization of variables which is not the case in the given example (pop and ad are solely mean adjusted). Thus, while the initial equation $(*)$ still holds, it does no longer simplify to $(**)$ as the variance (and hence the standard deviation) is not necessarily equal to one.
-
-The idea of the maximization problem is still the same and results in the following:
-
-$$\max \text{Var}(aX_1 + bX_2) = \max \ a^2 \sigma_{X_1}^2 + b^2 \sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1X_2} \quad \text{s.t.} \quad a^2 + b^2 = 1$$
-
+However, this derivation assumes standardization of variables which is not the case in the given example (pop and ad are solely mean adjusted!). Thus, while the initial equation $(*)$ still holds, it does no longer simplify to $(**)$ as the variance is not necessarily equal to one.The idea of the maximization problem is still the same and results in the following:
+$$\max_{X_1,X_2} \text{Var}(aX_1 + bX_2) = \max \ a^2 \sigma_{X_1}^2 + b^2 \sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1,X_2} \quad \text{s.t.} \quad a^2 + b^2 = 1$$
 The corresponding Lagrangian function is:
-
-$$\mathcal{L}(a, b, \lambda) = a^2 \cdot \sigma_{X_1}^2 + b^2 \cdot \sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1X_2} + \lambda(a^2 + b^2 - 1)$$
-
+$$\mathcal{L}(a, b, \lambda) = a^2\sigma_{X_1}^2 + b^2\sigma_{X_2}^2 + 2ab \cdot \sigma_{X_1X_2} + \lambda(a^2 + b^2 - 1)$$
 This gives us the following three conditions:
+$$(1) \quad \frac{\partial \mathcal{L}}{\partial a} = 2a \cdot \sigma_{X_1}^2 + 2b \cdot \sigma_{X_1X_2} + \lambda \cdot 2a \stackrel{!}{=} 0$$
+$$(2) \quad \frac{\partial \mathcal{L}}{\partial b} = 2b \cdot \sigma_{X_2}^2 + 2a \cdot \sigma_{X_1X_2} + \lambda \cdot 2b \stackrel{!}{=} 0$$
+$$(3) \quad a^2 + b^2 = 1$$
+Solving this set of equations for $a$ and $b$ is not possible as we don't have access to the data points used. The book gives us the loadings $a=0.839$ and $b=0.544$, resulting in the equation for the first principal component that captures the most variance:
+$$PC_1 = Z_1 = 0.839 \times (\text{pop} - \overline{\text{pop}}) + 0.544 \times (\text{ad} - \overline{\text{ad}})$$
+As each principal component $PC_i$ explains additional variance of the initial predictors, $PC_2$ explains the complimentary variance in the data that is not captured by $PC_1$. Hence $PC_2$ has to be uncorrelated with $PC_1$. We can thus derive $PC_2$ by writing both principal components in their vector form with $PC_1 = \begin{bmatrix} a_1 \\ b_1 \end{bmatrix}, PC_2 = \begin{bmatrix} a_2 \\ b_2 \end{bmatrix}$ and their loadings $a_1,b_1$, and $a_2,b_2$ respectively.
 
-$$\frac{\partial \mathcal{L}}{\partial a} = 2a \cdot \sigma_{X_1}^2 + 2b \cdot \sigma_{X_1X_2} + \lambda \cdot 2a \stackrel{!}{=} 0$$
-
-$$\frac{\partial \mathcal{L}}{\partial b} = 2b \cdot \sigma_{X_2}^2 + 2a \cdot \sigma_{X_1X_2} + \lambda \cdot 2b \stackrel{!}{=} 0$$
-
-$$a^2 + b^2 = 1$$
-
-Solving this set of equations for $a$ and $b$ is not possible as we don't have access to the data set used.
-
-The data used in the book gives us the loadings $a=0.839$ and $b=0.544$, resulting in the equation for the first principal component:
-
-$$Z_1 = 0.839 \times (\text{pop} - \overline{\text{pop}}) + 0.544 \times (\text{ad} - \overline{\text{ad}})$$
-$PC_2$ explains the rest of the variance in the data that is not captured by $PC_1$. Hence $PC_2$ has to be uncorrelated with $PC_1$.
-
+Two principal components are **uncorrelated** when the dot product of their vectors is equal to zero. This is equivalent with **the two principal component lines being orthogonal to each other**.
 $$\begin{bmatrix} a_1 \\ b_1 \end{bmatrix} \cdot \begin{bmatrix} a_2 \\ b_2 \end{bmatrix} = 0$$
-
+We can apply the dot product, substitute the loadings of $PC_1$ and solve for $a_2$ and $b_2$:
 $$a_1 \cdot a_2 + b_1 \cdot b_2 = 0$$
-
 $$0.839 \cdot a_2 + 0.544 \cdot b_2 = 0$$
-
 $$\Rightarrow (a_2, b_2) = (0.544, -0.839)$$
-
-$$Z_2 = 0.544 \times (\text{pop} - \overline{\text{pop}}) - 0.839 \times (\text{ad} - \overline{\text{ad}})$$
+The resulting loadings can then be plugged in to yield $PC_2$:
+$$PC_2 = Z_2 = 0.544 \times (\text{pop} - \overline{\text{pop}}) - 0.839 \times (\text{ad} - \overline{\text{ad}})$$
 
 ## Summary
 
