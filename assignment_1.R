@@ -1,11 +1,8 @@
 # Import necessary libraries
-library(readxl)
-library(dplyr)
-library(purrr)
 library(MASS) ## for ridge estimation
 
 # Load data
-data = read.csv("credit_data.csv")
+data <- read.csv("credit_data.csv")
 
 # Replace Yes/No with binary numbers
 data$Student <- ifelse(data$Student == "Yes", 1, 0)
@@ -32,7 +29,7 @@ X_std <- as.data.frame(X_standardized)
 # Define ridge coefficient function
 compute_coefficients <- function(lambda, X, y, m = 10) {
   
-  ridge_fit <- lm.ridge(y ~ as.matrix(X), lambda = lambda, Inter = FALSE, scales = TRUE)
+  ridge_fit <- lm.ridge(y ~ as.matrix(X), lambda = lambda)
   
   coefficients <- coef(ridge_fit)
   
@@ -86,7 +83,9 @@ View(df)
 # --- Ensure figures folder exists
 if (!dir.exists("figures")) dir.create("figures")
 
+
 # Code for first plot (lambdas on x-axis)
+
 # Save plot as PNG
 png("figures/figure_6.4_1.png", width = 768, height = 889, res = 120)
 
@@ -132,6 +131,7 @@ legend("topright",
        cex = 1.4)
 dev.off()
 
+
 # Second plot for l2 norm ratio on x-axis
 df$norm_ratio <- ridge_norms / ols_norm
 
@@ -147,6 +147,10 @@ plot(df_ratio$norm_ratio, df_ratio$Income, type = "l", lwd = 2,
      ylab = "Standardized Coefficients",
      xaxt = "s", yaxt = "s")
 
+# Custom y-axis
+axis(side = 2, at = seq(-300, 400, by = 100),
+     labels = seq(-300, 400, by = 100), las = 0)
+
 # Highlighted series
 lines(df_ratio$norm_ratio, df_ratio$Limit,   col = "red",       lty = 2, lwd = 2)
 lines(df_ratio$norm_ratio, df_ratio$Rating,  col = "blue",      lty = 3, lwd = 2)
@@ -161,7 +165,6 @@ lines(df_ratio$norm_ratio, df_ratio$Married,     col = "grey70", lwd = 1)
 lines(df_ratio$norm_ratio, df_ratio$RegionEast,  col = "grey70", lwd = 1)
 lines(df_ratio$norm_ratio, df_ratio$RegionWest,  col = "grey70", lwd = 1)
 lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70", lwd = 1)
-
 
 # Finish writing the file
 dev.off()
