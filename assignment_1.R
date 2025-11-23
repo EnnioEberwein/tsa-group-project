@@ -29,7 +29,7 @@ X_std <- as.data.frame(X_standardized)
 # Define ridge coefficient function
 compute_coefficients <- function(lambda, X, y, m = 10) {
   
-  ridge_fit <- lm.ridge(y ~ as.matrix(X), lambda = lambda)
+  ridge_fit <- lm.ridge(y ~ as.matrix(X) - 1, lambda = lambda)
   
   coefficients <- coef(ridge_fit)
   
@@ -56,8 +56,9 @@ coefficients <- sapply(lambdas, function(lambda) compute_coefficients(lambda, X_
 # Transpose dataframe (switch columns and rows)
 df <- t(coefficients)
 
-# Drop the first column, clean up the column names and include lambda values
-df <- df[, -1]
+View(df)
+
+# Clean up the column names and include lambda values
 colnames(df) <- gsub("as\\.matrix\\(X\\)", "", colnames(df))
 df <- cbind(lambda = lambdas, df)
 df <- as.data.frame(df)
@@ -67,6 +68,7 @@ ridge_norms <- apply(df[ , !(names(df) %in% "lambda")], 1, function(row) sqrt(su
 print(ridge_norms)
 
 # calculate l2 norm of OLS estimators (remove N/A from dummy variable to allow for computation)
+print(ols_coefficients)
 ols_norm <- sqrt(sum(ols_coefficients^2, na.rm = TRUE))
 print(ols_norm)
 
@@ -168,4 +170,3 @@ lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70", lwd = 1)
 
 # Finish writing the file
 dev.off()
-
