@@ -246,7 +246,7 @@ This plot visualizes how the standardized ridge coefficients change relative to 
 
 # Exercise 2 - Principal Component Analysis
 
-Exercise 2 is split in three parts:
+The next four paragraphs of Exercise 2 will discuss the following three questions in detail:
 
 1. Explain in detail how the two lines in Figure 6.14 are derived.
 2. Why are they orthogonal to each other?
