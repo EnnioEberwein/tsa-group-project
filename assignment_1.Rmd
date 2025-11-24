@@ -212,7 +212,7 @@ legend("topright",
        cex = 1.2)
 ```
 
-The ridge paths illustrate how each standardized coefficient shrinks toward zero as $\lambda$ grows, although Rating and Income also increase partially before asymptotically approaching zero. On the left side of the plot, the coefficients correspond closely to the OLS estimates. However, this graph only depicts the coefficients based on a full training set. Thus, we can not draw any conclusions about the optimal value of $\lambda$ and the coefficients. To make this possible, we would need to calculate the MSPE for multiple values of $\lambda$ using 10-fold cross-validation and choose the minimum MSPE.
+The ridge paths illustrate how each standardized coefficient shrinks toward zero as $\lambda$ grows, although Rating and Income also increase partially before asymptotically approaching zero. On the left side of the plot, the coefficients correspond closely to the OLS estimates. However, this graph only depicts the coefficients based on a full training set. Thus, we cannot draw any conclusions about the optimal value of $\lambda$ and the coefficients. To make this possible, we would need to calculate the MSPE for multiple values of $\lambda$ using 10-fold cross-validation and choose the minimum MSPE.
 
 ### 6.2 Norm-Ratio Plot
 
@@ -240,7 +240,7 @@ lines(df_ratio$norm_ratio, df_ratio$RegionWest,  col = "grey70")
 lines(df_ratio$norm_ratio, df_ratio$RegionSouth, col = "grey70")
 ```
 
-This plot visualizes how the standardized ridge coefficients change relative to the ratio of shrinkage (the ratio of the ridge to OLS $\ell_2$ norms). On the right-hand side of the plot, the coefficients correspond to the OLS estimates when $\lambda$ is zero. Thus, the ratio is equivalent to one. Moving from right to left, the magnitude of the $\ell_2$ norm of the ridge regression declines, which decreases the ratio from one to zero. Again, we can not draw any conclusions about the optimal value of $\lambda$ and the coefficients.
+This plot visualizes how the standardized ridge coefficients change relative to the ratio of shrinkage (the ratio of the ridge to OLS $\ell_2$ norms). On the right-hand side of the plot, the coefficients correspond to the OLS estimates when $\lambda$ is zero. Thus, the ratio is equivalent to one. Moving from right to left, the magnitude of the $\ell_2$ norm of the ridge regression declines, which decreases the ratio from one to zero. Again, we cannot draw any conclusions about the optimal value of $\lambda$ and the coefficients.
 
 \newpage
 
